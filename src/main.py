@@ -1,7 +1,8 @@
 #!python
-
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser
 from os import path
+
+import mode
 
 
 def path_type(value):
@@ -27,6 +28,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     if args.mode == 'mosaic':
-        pass
+        mode.mosaic(args)
     elif args.mode == 'palette':
-        pass
+        mode.palette(args)
