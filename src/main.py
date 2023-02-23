@@ -1,11 +1,11 @@
-#!/bin/python
+#!python
 
 from argparse import ArgumentParser, Namespace
 from os import path
 
 
 def path_type(value):
-    return path.expanduser()
+    return path.expanduser(value)
 
 
 parser = ArgumentParser('Img2Mosaic')
