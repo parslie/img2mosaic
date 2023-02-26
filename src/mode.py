@@ -71,6 +71,12 @@ def get_closest_key(palette: dict, top_left: numpy.ndarray, top_right: numpy.nda
 
     return closest_key
 
+def get_existing_paths(palette: dict) -> set:
+    existing_paths = set()
+    for paths in palette.values():
+        existing_paths.update(paths)
+    return existing_paths
+
 def mosaic(args: Namespace):
     src_img = cv2.imread(args.src)
     src_height, src_width, _ = src_img.shape
@@ -145,14 +151,15 @@ def mosaic(args: Namespace):
 
 
 def palette(args: Namespace):
-    paths = []
+    palette = load_palette(args)
+    existing_paths = get_existing_paths(palette)
+
+    paths = set()
     for dir in args.dirs:
         for ext in ('jpg', 'jpeg', 'jpe', 'png', 'webp'):
-            # TODO: skip paths already added to palette here
             new_paths = glob(f'{dir}/*.{ext}')
-            paths.extend(new_paths)
-
-    palette = load_palette(args)
+            paths.update(new_paths)
+    paths.difference_update(existing_paths)
 
     print(f'0 / {len(paths)}', end='\r')
 
