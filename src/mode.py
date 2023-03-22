@@ -6,6 +6,7 @@ import random
 from argparse import Namespace
 from glob import glob
 from os.path import exists as path_exists
+from os import makedirs
 
 
 def load_palette(args: Namespace) -> dict:
@@ -151,6 +152,7 @@ def mosaic(args: Namespace):
 
 
 def palette(args: Namespace):
+    makedirs(args.config, exist_ok=True)
     palette = load_palette(args)
     existing_paths = get_existing_paths(palette)
 
