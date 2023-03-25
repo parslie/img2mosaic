@@ -1,2 +1,7 @@
-**/__pycache__/
 .venv/
+.old/
+
+**/__pycache__/
+
+*.png
+*.jpg

@@ -1,3 +1,4 @@
+import concurrent.futures
 import cv2
 import json
 import numpy
@@ -7,6 +8,7 @@ from argparse import Namespace
 from glob import glob
 from os.path import exists as path_exists
 from os import makedirs
+from threading import Semaphore
 
 
 def load_palette(args: Namespace) -> dict:
@@ -78,6 +80,8 @@ def get_existing_paths(palette: dict) -> set:
         existing_paths.update(paths)
     return existing_paths
 
+current_pixel = 0
+
 def mosaic(args: Namespace):
     src_img = cv2.imread(args.src)
     src_height, src_width, _ = src_img.shape
@@ -104,48 +108,88 @@ def mosaic(args: Namespace):
     palette = load_palette(args)
     cache = load_cache(args)
 
-    current_pixel = 0
+    current_pixel_sem = Semaphore()
+    cache_sem = Semaphore()
+    
     pixel_count = int(src_height * src_width / 4)
     print(f'0 / {pixel_count}', end='\r')
 
-    for y in range(0, src_height, 2):
-        for x in range(0, src_width, 2):
-            top_left = src_img[y, x]
-            top_right = src_img[y, x+1]
-            bottom_left = src_img[y+1, x]
-            bottom_right = src_img[y+1, x+1]
+    # Function fills a specific section of the mosaic
+    def fill_section(src_width_range, src_height_range):
+        global current_pixel  # Current needs to be global to be able to be modified
 
-            # Get palette image
-            img_key = colors_to_key(top_left, top_right, bottom_left, bottom_right)
-            img_list = palette.get(img_key, [])
-            # TODO: pop from cache if exists
+        for y in src_height_range:
+            for x in src_width_range:
+                top_left = src_img[y, x]
+                top_right = src_img[y, x+1]
+                bottom_left = src_img[y+1, x]
+                bottom_right = src_img[y+1, x+1]
 
-            if not img_list:
-                cached_key = cache.get(img_key, None)
+                # Get palette image
+                img_key = colors_to_key(top_left, top_right, bottom_left, bottom_right)
+                img_list = palette.get(img_key, [])
+                # TODO: pop from cache if exists
 
-                if cached_key:
-                    # Cached key should be valid, unless you've reset the palette w/o resetting the cache
-                    img_list = palette[cached_key]
-                else:
-                    closest_key = get_closest_key(palette, top_left, top_right, bottom_left, bottom_right)
-                    # Closest key should be valid, since it's found via the palette
-                    img_list = palette[closest_key]
-                    cache[img_key] = closest_key
+                if not img_list:
+                    cached_key = cache.get(img_key, None)
 
-            img = cv2.imread(random.choice(img_list))
-            img = cv2.resize(img, (args.pixel_size, args.pixel_size))
+                    if cached_key:
+                        # Cached key should be valid, unless you've reset the palette w/o resetting the cache
+                        img_list = palette[cached_key]
+                    else:
+                        closest_key = get_closest_key(palette, top_left, top_right, bottom_left, bottom_right)
+                        # Closest key should be valid, since it's found via the palette
+                        img_list = palette[closest_key]
+                        with cache_sem:
+                            cache[img_key] = closest_key
 
-            # Apply palette image to dest
-            dest_y = int(y / 2) * args.pixel_size
-            dest_x = int(x / 2) * args.pixel_size
-            for dest_y_offset in range(args.pixel_size):
-                for dest_x_offset in range(args.pixel_size):
-                    dest_img[dest_y+dest_y_offset, dest_x+dest_x_offset] = img[dest_y_offset, dest_x_offset]
+                img = cv2.imread(random.choice(img_list))
+                img = cv2.resize(img, (args.pixel_size, args.pixel_size))
 
-            current_pixel += 1
-            print(f'{current_pixel} / {pixel_count}', end='\r')
-        # TODO: save cache after each row?
-    print()
+                # Apply palette image to dest
+                dest_y = int(y / 2) * args.pixel_size
+                dest_x = int(x / 2) * args.pixel_size
+                for dest_y_offset in range(args.pixel_size):
+                    for dest_x_offset in range(args.pixel_size):
+                        dest_img[dest_y+dest_y_offset, dest_x+dest_x_offset] = img[dest_y_offset, dest_x_offset]
+
+                with current_pixel_sem:
+                    current_pixel += 1
+                    print(f'{current_pixel} / {pixel_count}', end='\r')
+
+    # Fill each corner of the mosaic concurrently
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        half_width = int(src_width / 2)
+        half_height = int(src_height / 2)
+        if half_width % 2 == 0:
+            left_range = range(0, half_width, 2)
+            right_range = range(half_width, src_width, 2)
+        else:
+            left_range = range(0, half_width, 2)
+            right_range = range(half_width + 1, src_width, 2)
+        if half_height % 2 == 0:
+            bottom_range = range(0, half_height, 2)
+            top_range = range(half_height, src_height, 2)
+        else:
+            bottom_range = range(0, half_height, 2)
+            top_range = range(half_height + 1, src_height, 2)
+        a = executor.submit(fill_section,
+                            left_range,
+                            bottom_range)
+        b = executor.submit(fill_section,
+                            right_range,
+                            bottom_range)
+        c = executor.submit(fill_section,
+                            left_range,
+                            top_range)
+        d = executor.submit(fill_section,
+                            right_range,
+                            top_range)
+        a.result()
+        b.result()
+        c.result()
+        d.result()
+        print()
 
     save_cache(args, cache)
     cv2.imwrite(args.dest, dest_img)
