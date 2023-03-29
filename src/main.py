@@ -2,7 +2,8 @@
 from argparse import ArgumentParser
 from os import path
 
-import mode
+import modes.mosaic as mosaic
+import modes.palette as palette
 
 
 def path_type(value):
@@ -23,11 +24,12 @@ palette_parser.add_argument('dirs', nargs='+', type=path_type, help='paths to th
 
 for subparser in [mosaic_parser, palette_parser]:
     subparser.add_argument('--config', type=path_type, default='~/.config/img2mosaic', help='path to config folder')
+    subparser.add_argument('--pixels-per-img', dest='pixels_per_img', type=int, default=2, help='amount of src pixels to replace with one image')
 
 if __name__ == '__main__':
     args = parser.parse_args()
     
     if args.mode == 'mosaic':
-        mode.mosaic(args)
+        mosaic.run(args)
     elif args.mode == 'palette':
-        mode.palette(args)
+        palette.run(args)
