@@ -24,7 +24,7 @@ palette_parser.add_argument('dirs', nargs='+', type=path_type, help='paths to th
 
 for subparser in [mosaic_parser, palette_parser]:
     subparser.add_argument('--config', type=path_type, default='~/.config/img2mosaic', help='path to config folder')
-    subparser.add_argument('--pixels-per-img', dest='pixels_per_img', type=int, default=2, help='amount of src pixels to replace with one image')
+    subparser.add_argument('--pixels-per-img', dest='pixels_per_img', type=int, default=1, help='amount of src pixels to replace with one image')
 
 if __name__ == '__main__':
     args = parser.parse_args()
