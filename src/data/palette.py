@@ -1,11 +1,12 @@
 import json
-from argparse import Namespace
 from os import makedirs
 from os.path import exists as path_exists
 
+from arguments import Arguments
 
-def load_palette(args: Namespace) -> dict:
-    file_name = f'palette.{args.pixels_per_img}x{args.pixels_per_img}.json'
+
+def load_palette(args: Arguments) -> dict:
+    file_name = f'palette.{args.density}.json'
     palette = {}
     if path_exists(f'{args.config}/{file_name}'):
         with open(f'{args.config}/{file_name}', 'r') as file:
@@ -13,8 +14,8 @@ def load_palette(args: Namespace) -> dict:
     return palette
 
 
-def save_palette(args: Namespace, palette: dict):
-    file_name = f'palette.{args.pixels_per_img}x{args.pixels_per_img}.json'
+def save_palette(args: Arguments, palette: dict):
+    file_name = f'palette.{args.density}.json'
     makedirs(args.config, exist_ok=True)
     with open(f'{args.config}/{file_name}', 'w') as file:
         file.write(json.dumps(palette, sort_keys=True))

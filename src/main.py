@@ -1,35 +1,17 @@
-#!python
-from argparse import ArgumentParser
-from os import path
-
-import modes.mosaic as mosaic
-import modes.palette as palette
+from actions.analysis import analyze_img_dir
+from actions.generation import generate_mosaic
+from arguments import get_arguments 
 
 
-def path_type(value):
-    return path.expanduser(value)
+def main():
+    args = get_arguments()
 
+    match args.action:
+        case 'generate':
+            generate_mosaic(args)
+        case 'analyze':
+            analyze_img_dir(args)
 
-parser = ArgumentParser('Img2Mosaic')
-subparsers = parser.add_subparsers(dest='mode', required=True)
-
-mosaic_parser = subparsers.add_parser('mosaic', help='mode for generating mosaics')
-mosaic_parser.add_argument('src', type=path_type, help='path to the image to mosaic')
-mosaic_parser.add_argument('dest', type=path_type, help='path to the generated mosaic')
-mosaic_parser.add_argument('-s', dest='src_size', type=int, help='size of the image to mosaic')
-mosaic_parser.add_argument('-p', dest='pixel_size', type=int, default=16, help='size of the images used as pixels')
-
-palette_parser = subparsers.add_parser('palette', help='mode for analyzing images to use as pixels')
-palette_parser.add_argument('dirs', nargs='+', type=path_type, help='paths to the directories of images to add to the palette')
-
-for subparser in [mosaic_parser, palette_parser]:
-    subparser.add_argument('--config', type=path_type, default='~/.config/img2mosaic', help='path to config folder')
-    subparser.add_argument('--pixels-per-img', dest='pixels_per_img', type=int, default=1, help='amount of src pixels to replace with one image')
 
 if __name__ == '__main__':
-    args = parser.parse_args()
-    
-    if args.mode == 'mosaic':
-        mosaic.run(args)
-    elif args.mode == 'palette':
-        palette.run(args)
+    main()

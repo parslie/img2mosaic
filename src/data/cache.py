@@ -1,11 +1,12 @@
 import json
-from argparse import Namespace
 from os import makedirs
 from os.path import exists as path_exists
 
+from arguments import Arguments
 
-def load_cache(args: Namespace) -> dict:
-    file_name = f'cache.{args.pixels_per_img}x{args.pixels_per_img}.json'
+
+def load_cache(args: Arguments) -> dict:
+    file_name = f'cache.{args.density}.json'
     cache = {}
     if path_exists(f'{args.config}/{file_name}'):
         with open(f'{args.config}/{file_name}', 'r') as file:
@@ -13,8 +14,8 @@ def load_cache(args: Namespace) -> dict:
     return cache
 
 
-def save_cache(args: Namespace, cache: dict):
-    file_name = f'cache.{args.pixels_per_img}x{args.pixels_per_img}.json'
+def save_cache(args: Arguments, cache: dict):
+    file_name = f'cache.{args.density}.json'
     makedirs(args.config, exist_ok=True)
     with open(f'{args.config}/{file_name}', 'w') as file:
         file.write(json.dumps(cache, sort_keys=True))
