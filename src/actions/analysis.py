@@ -70,7 +70,7 @@ def analyze_img_dir(args: Arguments):
         paths.difference_update(get_palette_paths(palette))
 
     print(f'0 / {len(paths)}', end='\r')
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    with ThreadPoolExecutor(max_workers=6) as executor:
         futures = list[Future]()
         for path in paths:
             future = executor.submit(analyze_img, path, len(paths), palette, args)
