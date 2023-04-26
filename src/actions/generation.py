@@ -72,9 +72,9 @@ def fill_pixel(x: int, y: int,
     # Apply palette image to dest
     dest_y = int(y / args.density) * args.pixel_size
     dest_x = int(x / args.density) * args.pixel_size
-    for dest_y_offset in range(args.pixel_size):
-        for dest_x_offset in range(args.pixel_size):
-            dest_img[dest_y+dest_y_offset, dest_x+dest_x_offset] = img[dest_y_offset, dest_x_offset]
+    dest_y_end = dest_y + args.pixel_size
+    dest_x_end = dest_x + args.pixel_size
+    dest_img[dest_y:dest_y_end, dest_x:dest_x_end] = img[0:args.pixel_size, 0:args.pixel_size]
 
     with pixels_replaced_lock:
         pixels_replaced += 1
@@ -86,8 +86,8 @@ def generate_mosaic(args: Arguments):
     src_img = scale_src_img(args, src_img)
     src_height, src_width, _ = src_img.shape
 
-    dest_height = int(src_height / args.density) * args.pixel_size
-    dest_width = int(src_width / args.density) * args.pixel_size
+    dest_height = src_height // args.density * args.pixel_size
+    dest_width = src_width // args.density * args.pixel_size
     dest_img = numpy.zeros(shape=(dest_height, dest_width, 3), dtype=numpy.uint8)
 
     palette = load_palette(args)
