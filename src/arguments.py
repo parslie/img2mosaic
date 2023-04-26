@@ -118,6 +118,15 @@ def add_analysis_arguments(parser: ArgumentParser):
     )
 
 
+def add_cache_arguments(parser: ArgumentParser):
+    parser.add_argument(
+        '-a', '--all',
+        default=False,
+        action='store_true',
+        help='generate entries for all colors, even ones already cached',
+    )
+
+
 def create_parser() -> ArgumentParser:
     parser = ArgumentParser(
         'img2mosaic',
@@ -141,6 +150,15 @@ def create_parser() -> ArgumentParser:
     )
     add_analysis_arguments(analyze_parser)
     add_general_arguments(analyze_parser)
+
+    # TODO: finish
+    cache_parser = sub_parsers.add_parser(
+        'cache',
+        description='TODO',
+        help='TODO',
+    )
+    add_cache_arguments(cache_parser)
+    add_general_arguments(cache_parser)
     
     return parser
 
