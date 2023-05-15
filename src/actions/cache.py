@@ -1,3 +1,5 @@
+import random
+
 from arguments import Arguments
 from data.cache import load_cache, save_cache
 from data.palette import load_palette
@@ -5,9 +7,15 @@ from utils import colors_to_closest_key, key_to_colors
 
 
 def all_single_color_keys():
-    for r in range(256):
-        for g in range(256):
-            for b in range(256):
+    r_values = list(range(256))
+    random.shuffle(r_values)
+    for r in r_values:
+        g_values = list(range(256))
+        random.shuffle(g_values)
+        for g in g_values:
+            b_values = list(range(256))
+            random.shuffle(b_values)
+            for b in b_values:
                 yield f'{r} {g} {b}'
 
 
@@ -37,13 +45,17 @@ def generate_cache(args: Arguments):
     cache = load_cache(args)
     palette = load_palette(args)
 
-    # TODO: find good way to remove already cached colors if (args.all == False)
     color_count = total_color_count(args)
+    if len(str(color_count)) > 9:
+        color_count = f'{color_count:.3e}'
     colors_cached = 0
 
     print(f'0 / {color_count} ', end='\r')
     for idx, color_key in enumerate(all_color_keys(args)):
-        print(f'{idx + 1} / {color_count} ', end='\r')
+        if len(str(idx)) > 9:
+            print(f'{idx + 1:.3e} / {color_count} ', end='\r')
+        else:
+            print(f'{idx} / {color_count} ', end='\r')
 
         if args.all or color_key not in cache.keys():
             colors = key_to_colors(color_key)
