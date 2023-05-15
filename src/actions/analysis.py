@@ -5,10 +5,11 @@ from glob import glob
 from threading import Lock
 
 from arguments import Arguments
+from data.cache import load_cache, save_cache
 from data.palette import load_palette, save_palette, get_palette_paths
 from utils import colors_to_key
 
-palette_lock = Lock()
+data_lock = Lock()
 paths_analyzed_lock = Lock()
 paths_analyzed = 0
 
@@ -32,7 +33,7 @@ def get_img_colors(img: numpy.ndarray, args: Arguments) -> list[numpy.ndarray]:
     return colors
 
 
-def analyze_img(path: str, path_count: int, palette: dict, args: Arguments):
+def analyze_img(path: str, path_count: int, palette: dict, cache: dict, args: Arguments):
     global paths_analyzed
 
     img = cv2.imread(path) # TODO(?): crop image to square
@@ -44,19 +45,22 @@ def analyze_img(path: str, path_count: int, palette: dict, args: Arguments):
         paths_analyzed += 1
         print(f'{paths_analyzed} / {path_count}', end='\r')
 
-    with palette_lock:
+    with data_lock:
         img_list = palette.get(img_key, [])
         if path not in img_list:
             img_list.append(path)
+            cache.pop(img_key, None)
         palette[img_key] = img_list
 
         if paths_analyzed % 1000 == 0:
             save_palette(args, palette)
+            save_cache(args, cache)
 
 
 
 def analyze_img_dir(args: Arguments):
     palette = load_palette(args)
+    cache = load_cache(args)
 
     paths = set()
     for ext in ('jpg', 'jpeg', 'jpe', 'png', 'webp'):
@@ -72,11 +76,16 @@ def analyze_img_dir(args: Arguments):
     print(f'0 / {len(paths)}', end='\r')
     with ThreadPoolExecutor(max_workers=6) as executor:
         futures = list[Future]()
-        for path in paths:
-            future = executor.submit(analyze_img, path, len(paths), palette, args)
-            futures.append(future)
-        for future in futures:
-            future.result()
+        try:
+            for path in paths:
+                future = executor.submit(analyze_img, path, len(paths), palette, cache, args)
+                futures.append(future)
+            for future in futures:
+                future.result()
+        except KeyboardInterrupt as inter:
+            for future in futures:
+                future.cancel()
+            raise inter
     print()
 
     save_palette(args, palette)

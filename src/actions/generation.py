@@ -97,12 +97,17 @@ def generate_mosaic(args: Arguments):
     print(f'0 / {pixel_count}', end='\r')
     with ThreadPoolExecutor(max_workers=6) as executor:
         futures = list[Future]()
-        for y in range(0, src_height, args.density):
-            for x in range(0, src_width, args.density):
-                future = executor.submit(fill_pixel, x, y, src_img, dest_img, pixel_count, palette, cache, args)
-                futures.append(future)
-        for future in futures:
-            future.result()
+        try:
+            for y in range(0, src_height, args.density):
+                for x in range(0, src_width, args.density):
+                    future = executor.submit(fill_pixel, x, y, src_img, dest_img, pixel_count, palette, cache, args)
+                    futures.append(future)
+            for future in futures:
+                future.result()
+        except KeyboardInterrupt as inter:
+            for future in futures:
+                future.cancel()
+            raise inter
     print()
 
     save_cache(args, cache)
