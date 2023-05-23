@@ -129,6 +129,9 @@ def fill_pixel(x: int, y: int,
                 cache[img_key] = closest_key
             with stats_lock:
                 stats.cached_entries += 1
+                if stats.cached_entries % 25: # TODO: swap out for KeyboardInterrupt
+                    with cache_lock:
+                        save_cache(args, cache)
 
     img = cv2.imread(random.choice(img_list))
     img = cv2.resize(img, (args.pixel_size, args.pixel_size))
@@ -155,24 +158,30 @@ def generate_mosaic(args: Arguments):
     progress = Progress(src_height // args.density * src_width // args.density)
     stats = Statistics()
 
-    # TODO: implement KeyboardInterrupt except
     print('\r', progress, sep='', end='\r')
+
     with ThreadPoolExecutor(max_workers=6) as executor:
         start_time = perf_counter()
-
         futures = list[Future]()
-        for y in range(0, src_height, args.density):
-            for x in range(0, src_width, args.density):
-                future = executor.submit(fill_pixel, x, y, src_img, dest_img, stats, palette, cache, args)
-                futures.append(future)
 
-        for future in as_completed(futures):
-            stats.completion_time += perf_counter() - start_time
-            start_time = perf_counter()
-            progress.current += 1
-            progress.speed = progress.current / stats.completion_time
-            print('\r', progress, sep='', end='\r')
-    print('\n\n', stats, sep='')
+        try:
+            for y in range(0, src_height, args.density):
+                for x in range(0, src_width, args.density):
+                    future = executor.submit(fill_pixel, x, y, src_img, dest_img, stats, palette, cache, args)
+                    futures.append(future)
 
+            for future in as_completed(futures):
+                stats.completion_time += perf_counter() - start_time
+                start_time = perf_counter()
+                progress.current += 1
+                progress.speed = progress.current / stats.completion_time
+                print('\r', progress, sep='', end='\r')
+        except KeyboardInterrupt:
+            print('\n\nCancelling, do not interrupt...', sep='')
+            for future in futures:
+                future.cancel()
+        else:
+            cv2.imwrite(args.dest, dest_img)
+
+    print('\n', stats, sep='')
     save_cache(args, cache)
-    cv2.imwrite(args.dest, dest_img)
