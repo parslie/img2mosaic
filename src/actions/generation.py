@@ -1,45 +1,107 @@
+"""
+TODO: rougher color precision could speed up caching, analysis, and generation
+"""
 import cv2
+import math
 import numpy
 import random
-from concurrent.futures import Future, ThreadPoolExecutor
+import shutil
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from threading import Lock
 from time import perf_counter
 
 from arguments import Arguments
-from data.cache import load_cache, save_cache
 from data.palette import load_palette
+from data.cache import load_cache, save_cache
 from utils import colors_to_key, colors_to_closest_key
 
+MAX_FUTURES_IN_QUEUE = 64
+
 cache_lock = Lock()
-pixels_replaced_lock = Lock()
-pixels_replaced = 0
+stats_lock = Lock()
 
 
-def scale_src_img(args: Arguments, src_img: numpy.ndarray) -> numpy.ndarray:
-    src_height, src_width, _ = src_img.shape
-    src_size = max(src_height, src_width)
+class Progress:
+    def __init__(self, total: int):
+        self.current = 0
+        self.total = total
+        self.speed = 0
 
-    # Decides new size of src
-    new_src_height, new_src_width = src_height, src_width
-    if args.src_size and args.src_size < src_size:
-        scale = args.src_size / src_size
-        new_src_height = round(src_height * scale)
-        new_src_width = round(src_width * scale)
+    @property
+    def percent(self) -> float:
+        return self.current / self.total
+
+    def eta_str(self) -> str:
+        remaining = self.total - self.current
+        if self.speed == 0:
+            return f'[ETA: {float("inf")} sec]'
+        
+        eta = remaining / self.speed
+        if eta / 60 >= 1:
+            return f'[ETA: {remaining / self.speed / 60:.1f} min]'
+
+        return f'[ETA: {remaining / self.speed:.1f} sec]'
+        
+    def percent_str(self) -> str:
+        return f'[{self.percent * 100:.0f}%]'
     
-    # Ensure divisible by args.density
-    new_src_height -= new_src_height % args.density
-    new_src_width -= new_src_width % args.density
+    def bar_str(self, width: int) -> str:
+        inner_width = min(width - 2, 34)
+        inner_filled_width = math.floor(inner_width * self.percent)
+        inner_empty_width = inner_width - inner_filled_width
+        inner_filled = '=' * inner_filled_width
+        inner_empty = ' ' * inner_empty_width
+        return f'[{inner_filled}{inner_empty}]'
 
-    # Apply new size of src
-    if new_src_height != src_height or new_src_width != src_width:
-        src_img = cv2.resize(src_img, (new_src_width, new_src_height))
+    def __repr__(self) -> str:
+        console_width = shutil.get_terminal_size((12, 24)).columns
+        
+        eta = self.eta_str()
+        percent = self.percent_str()
+        bar = self.bar_str(console_width - 2 - len(percent) - len(eta))
+        padding = ' ' * (console_width - 2 - len(eta) - len(percent) - len(bar))
+
+        return f'{bar} {percent} {eta}{padding}'
+
+
+class Statistics:
+    def __init__(self):
+        self.completion_time = 0
+        self.cached_entries = 0
+        # TODO: add time per pixel array
     
-    return src_img
+    def __repr__(self) -> str:
+        return f'Completion time: {self.completion_time:.1f} sec\n' + \
+            f'Cached entries: {self.cached_entries}'
+
+
+def load_src_img(args: Arguments) -> numpy.ndarray:
+    img = cv2.imread(args.src)
+    height, width, _ = img.shape
+
+    # Decides new size of image
+    scale_factor = args.src_size / max(width, height)
+    new_height, new_width = height, width
+    if scale_factor < 1:
+        new_height = round(height * scale_factor)
+        new_width = round(width * scale_factor)
+    
+    # Ensure divisible by {args.density}
+    if diff := new_height % args.density:
+        new_height += args.density - diff
+    if diff := new_width % args.density:
+        new_width += args.density - diff
+
+    # Apply new size of image
+    if new_height != height or new_width != width:
+        img = cv2.resize(img, (new_width, new_height))
+
+    return img
 
 
 def fill_pixel(x: int, y: int, 
-               src_img: cv2.Mat, dest_img: cv2.Mat, 
-               pixel_count: int,
+               src_img: cv2.Mat, dest_img: cv2.Mat,
+               stats: Statistics, 
                palette: dict, cache: dict, 
                args: Arguments):
     global pixels_replaced
@@ -65,6 +127,8 @@ def fill_pixel(x: int, y: int,
             img_list = palette[closest_key]
             with cache_lock:
                 cache[img_key] = closest_key
+            with stats_lock:
+                stats.cached_entries += 1
 
     img = cv2.imread(random.choice(img_list))
     img = cv2.resize(img, (args.pixel_size, args.pixel_size))
@@ -76,16 +140,11 @@ def fill_pixel(x: int, y: int,
     dest_x_end = dest_x + args.pixel_size
     dest_img[dest_y:dest_y_end, dest_x:dest_x_end] = img[0:args.pixel_size, 0:args.pixel_size]
 
-    with pixels_replaced_lock:
-        pixels_replaced += 1
-        print(f'{pixels_replaced} / {pixel_count}', end='\r')
-
 
 def generate_mosaic(args: Arguments):
-    src_img = cv2.imread(args.src)
-    src_img = scale_src_img(args, src_img)
+    src_img = load_src_img(args)
     src_height, src_width, _ = src_img.shape
-
+    
     dest_height = src_height // args.density * args.pixel_size
     dest_width = src_width // args.density * args.pixel_size
     dest_img = numpy.zeros(shape=(dest_height, dest_width, 3), dtype=numpy.uint8)
@@ -93,22 +152,27 @@ def generate_mosaic(args: Arguments):
     palette = load_palette(args)
     cache = load_cache(args)
 
-    pixel_count = int(src_height / args.density * src_width / args.density)
-    print(f'0 / {pixel_count}', end='\r')
+    progress = Progress(src_height // args.density * src_width // args.density)
+    stats = Statistics()
+
+    # TODO: implement KeyboardInterrupt except
+    print('\r', progress, sep='', end='\r')
     with ThreadPoolExecutor(max_workers=6) as executor:
+        start_time = perf_counter()
+
         futures = list[Future]()
-        try:
-            for y in range(0, src_height, args.density):
-                for x in range(0, src_width, args.density):
-                    future = executor.submit(fill_pixel, x, y, src_img, dest_img, pixel_count, palette, cache, args)
-                    futures.append(future)
-            for future in futures:
-                future.result()
-        except KeyboardInterrupt as inter:
-            for future in futures:
-                future.cancel()
-            raise inter
-    print()
+        for y in range(0, src_height, args.density):
+            for x in range(0, src_width, args.density):
+                future = executor.submit(fill_pixel, x, y, src_img, dest_img, stats, palette, cache, args)
+                futures.append(future)
+
+        for future in as_completed(futures):
+            stats.completion_time += perf_counter() - start_time
+            start_time = perf_counter()
+            progress.current += 1
+            progress.speed = progress.current / stats.completion_time
+            print('\r', progress, sep='', end='\r')
+    print('\n\n', stats, sep='')
 
     save_cache(args, cache)
     cv2.imwrite(args.dest, dest_img)
