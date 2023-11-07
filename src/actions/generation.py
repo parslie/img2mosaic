@@ -10,7 +10,7 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from threading import Lock
 from time import perf_counter
 
-from arguments import Arguments
+from arguments.parsers import Arguments
 from data.palette import load_palette
 from data.cache import load_cache, save_cache
 from utils import colors_to_key, colors_to_closest_key

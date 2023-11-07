@@ -1,6 +1,6 @@
 import random
 
-from arguments import Arguments
+from arguments.parsers import Arguments
 from data.cache import load_cache, save_cache
 from data.palette import load_palette
 from utils import colors_to_closest_key, key_to_colors

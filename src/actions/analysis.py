@@ -4,7 +4,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from glob import glob
 from threading import Lock
 
-from arguments import Arguments
+from arguments.parsers import Arguments
 from data.cache import load_cache, save_cache
 from data.palette import load_palette, save_palette, get_palette_paths
 from utils import colors_to_key

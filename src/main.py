@@ -1,11 +1,11 @@
 from actions.analysis import analyze_img_dir
 from actions.cache import generate_cache
 from actions.generation import generate_mosaic
-from arguments import get_arguments 
+from arguments.parsers import get_args 
 
 
 def main():
-    args = get_arguments()
+    args = get_args()
 
     match args.action:
         case 'generate':

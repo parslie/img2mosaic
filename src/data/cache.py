@@ -2,7 +2,7 @@ import json
 from os import makedirs
 from os.path import exists as path_exists
 
-from arguments import Arguments
+from arguments.parsers import Arguments
 
 
 def load_cache(args: Arguments) -> dict:
