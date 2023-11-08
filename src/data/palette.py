@@ -1,28 +1,27 @@
 import json
 from os import makedirs
-from os.path import exists as path_exists
-
-from arguments.parsers import Arguments
+from platformdirs import user_data_path
 
 
-def load_palette(args: Arguments) -> dict:
-    file_name = f'palette.{args.density}.json'
-    palette = {}
-    if path_exists(f'{args.config}/{file_name}'):
-        with open(f'{args.config}/{file_name}', 'r') as file:
-            palette = json.loads(file.read())
-    return palette
+class Palette:
+    def __init__(self, profile: str):
+        self.path = user_data_path("img2mosaic", "Parslie").joinpath(f"palette.{profile}.json")
+        print(f"Palette path: {self.path}")
 
+        if self.path.exists():
+            with self.path.open("r") as file:
+                self.data = json.loads(file.read())
+        else:
+            self.data = {}
 
-def save_palette(args: Arguments, palette: dict):
-    file_name = f'palette.{args.density}.json'
-    makedirs(args.config, exist_ok=True)
-    with open(f'{args.config}/{file_name}', 'w') as file:
-        file.write(json.dumps(palette, sort_keys=True))
+    def save(self):
+        makedirs(self.path.parent, exist_ok=True)
+        with self.path.open("w") as file:
+            file.write(json.dumps(self.data, sort_keys=True))
 
-
-def get_palette_paths(palette: dict) -> set:
-    paths = set()
-    for path in palette.values():
-        paths.update(path)
-    return paths
+    @property
+    def paths(self) -> set:
+        paths = set()
+        for path in self.data.values():
+            paths.update(path)
+        return paths
