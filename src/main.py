@@ -2,6 +2,7 @@
 # from actions.cache import generate_cache
 # from actions.generation import generate_mosaic
 from actions.analysis import Analyze
+from actions.generation import Generate
 from arguments.parsers import get_args 
 
 
@@ -11,7 +12,7 @@ def main():
 
     match args.action:
         case "generate":
-            pass
+            action = Generate(args)
         case "analyze":
             action = Analyze(args)
         case "cache":

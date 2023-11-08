@@ -21,3 +21,9 @@ class Cache:
 
     def pop(self, key: str):
         self.data.pop(key, None)
+    
+    def get(self, key: str, default) -> str:
+        return self.data.get(key, default)
+    
+    def set(self, key: str, val: str):
+        self.data[key] = val

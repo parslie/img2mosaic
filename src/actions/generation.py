@@ -1,24 +1,19 @@
-"""
-TODO: rougher color precision could speed up caching, analysis, and generation
-"""
-import cv2
 import math
-import numpy
 import random
 import shutil
+import cv2
+import numpy
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from threading import Lock
 from time import perf_counter
 
 from arguments.parsers import Arguments
-from data.palette import load_palette
-from data.cache import load_cache, save_cache
+from data.cache import Cache
+from data.palette import Palette
 from utils import colors_to_key, colors_to_closest_key
+from .base import Action
 
-MAX_FUTURES_IN_QUEUE = 64
-
-cache_lock = Lock()
-stats_lock = Lock()
+# TODO: rougher color precision could speed up caching, analysis, and generation
 
 
 class Progress:
@@ -30,7 +25,7 @@ class Progress:
     @property
     def percent(self) -> float:
         return self.current / self.total
-
+    
     def eta_str(self) -> str:
         remaining = self.total - self.current
         if self.speed == 0:
@@ -71,117 +66,122 @@ class Statistics:
         # TODO: add time per pixel array
     
     def __repr__(self) -> str:
-        return f'Completion time: {self.completion_time:.1f} sec\n' + \
-            f'Cached entries: {self.cached_entries}'
+        return f"Completion time: {self.completion_time:.1f} sec\n" + \
+            f"Cached entries: {self.cached_entries}"
 
 
-def load_src_img(args: Arguments) -> numpy.ndarray:
-    img = cv2.imread(args.src)
-    height, width, _ = img.shape
+class Generate(Action):
+    def __init__(self, args: Arguments):
+        self.__unpack_args(args)
+        self.__load_src()
+        self.__load_dst()
 
-    # Decides new size of image
-    scale_factor = args.src_size / max(width, height)
-    new_height, new_width = height, width
-    if scale_factor < 1:
-        new_height = round(height * scale_factor)
-        new_width = round(width * scale_factor)
+        profile = f"{self.density}"
+        self.cache = Cache(profile)
+        self.palette = Palette(profile)
+
+        self.progress = Progress(self.src_height // self.density * self.src_width // self.density)
+        self.stats = Statistics()
+
+        self.futures = list[Future]()
+        self.cache_lock = Lock()
+        self.stats_lock = Lock()
+
+    def __unpack_args(self, args: Arguments):
+        self.density = args.density
+        self.src_path = args.src
+        self.dst_path = args.dst
+        self.src_max_size = args.src_size
+        self.pixel_size = args.pixel_size
+
+    def __load_src(self):
+        src = cv2.imread(self.src_path)
+        height, width, _ = src.shape
+
+        # Decides new size of image
+        scale_factor = self.src_max_size / max(height, width)
+        new_height, new_width = height, width
+        if scale_factor < 1:
+            new_height = round(height * scale_factor)
+            new_width = round(width * scale_factor)
+
+        # Ensures divisible by density
+        if diff := new_height % self.density:
+            new_height += self.density - diff
+        if diff := new_width % self.density:
+            new_width += self.density - diff
+
+        # Apply new size of image
+        if new_height != height or new_width != width:
+            src = cv2.resize(src, (new_width, new_height))
+
+        self.src = src
+        self.src_height, self.src_width, _ = self.src.shape
+
+    def __load_dst(self):
+        self.dst_height = self.src_height // self.density * self.pixel_size
+        self.dst_width = self.src_width // self.density * self.pixel_size
+        dst_shape = (self.dst_height, self.dst_width, 3)
+        self.dst = numpy.zeros(shape=dst_shape, dtype=numpy.uint8)
+
+    def run(self):
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            start_time = perf_counter()
+
+            for y in range(0, self.src_height, self.density):
+                for x in range(0, self.src_width, self.density):
+                    future = executor.submit(self.__fill_pixel, x, y)
+                    self.futures.append(future)
+            for future in as_completed(self.futures):
+                end_time = perf_counter()
+                self.stats.completion_time += end_time - start_time
+                start_time = end_time
+                self.progress.current += 1
+                self.progress.speed = self.progress.current / self.stats.completion_time
+                print(self.progress, end="\r")
+        print(self.progress)
+        print(self.stats)
+
+        self.cache.save()
+        cv2.imwrite(self.dst_path, self.dst)
     
-    # Ensure divisible by {args.density}
-    if diff := new_height % args.density:
-        new_height += args.density - diff
-    if diff := new_width % args.density:
-        new_width += args.density - diff
+    def __fill_pixel(self, x: int, y: int):
+        src_colors = []
+        for y_offset in range(self.density):
+            for x_offset in range(self.density):
+                src_color = self.src[y+y_offset, x+x_offset]
+                src_colors.append(src_color)
 
-    # Apply new size of image
-    if new_height != height or new_width != width:
-        img = cv2.resize(img, (new_width, new_height))
+        img_key = colors_to_key(src_colors)
+        img_list = self.palette.get(img_key, [])
 
-    return img
+        if not img_list:
+            cached_key = self.cache.get(img_key, None)
 
+            if cached_key:
+                # Cached key should be valid, unless you've reset the palette w/o resetting the cache
+                img_list = self.palette.get(cached_key, [])
+            else:
+                # TODO: do not use palette's data dict here
+                closest_key = colors_to_closest_key(self.palette.data, src_colors)
+                # Closest key should be valid, since it's found via the palette
+                img_list = self.palette.get(closest_key, [])
+                with self.cache_lock:
+                    self.cache.set(img_key, closest_key)
+                with self.stats_lock:
+                    self.stats.cached_entries += 1
 
-def fill_pixel(x: int, y: int, 
-               src_img: cv2.Mat, dest_img: cv2.Mat,
-               stats: Statistics, 
-               palette: dict, cache: dict, 
-               args: Arguments):
-    global pixels_replaced
+        img = cv2.imread(random.choice(img_list))
+        img = cv2.resize(img, (self.pixel_size, self.pixel_size))
 
-    src_colors = []
-    for y_offset in range(args.density):
-        for x_offset in range(args.density):
-            src_color = src_img[y+y_offset, x+x_offset]
-            src_colors.append(src_color)
-    
-    img_key = colors_to_key(src_colors)
-    img_list = palette.get(img_key, [])
+        # Apply palette image to dest
+        dest_y = int(y / self.density) * self.pixel_size
+        dest_x = int(x / self.density) * self.pixel_size
+        dest_y_end = dest_y + self.pixel_size
+        dest_x_end = dest_x + self.pixel_size
+        self.dst[dest_y:dest_y_end, dest_x:dest_x_end] = img[0:self.pixel_size, 0:self.pixel_size]
 
-    if not img_list:
-        cached_key = cache.get(img_key, None)
-
-        if cached_key:
-            # Cached key should be valid, unless you've reset the palette w/o resetting the cache
-            img_list = palette[cached_key]
-        else:
-            closest_key = colors_to_closest_key(palette, src_colors)
-            # Closest key should be valid, since it's found via the palette
-            img_list = palette[closest_key]
-            with cache_lock:
-                cache[img_key] = closest_key
-            with stats_lock:
-                stats.cached_entries += 1
-                if stats.cached_entries % 25: # TODO: swap out for KeyboardInterrupt
-                    with cache_lock:
-                        save_cache(args, cache)
-
-    img = cv2.imread(random.choice(img_list))
-    img = cv2.resize(img, (args.pixel_size, args.pixel_size))
-
-    # Apply palette image to dest
-    dest_y = int(y / args.density) * args.pixel_size
-    dest_x = int(x / args.density) * args.pixel_size
-    dest_y_end = dest_y + args.pixel_size
-    dest_x_end = dest_x + args.pixel_size
-    dest_img[dest_y:dest_y_end, dest_x:dest_x_end] = img[0:args.pixel_size, 0:args.pixel_size]
-
-
-def generate_mosaic(args: Arguments):
-    src_img = load_src_img(args)
-    src_height, src_width, _ = src_img.shape
-    
-    dest_height = src_height // args.density * args.pixel_size
-    dest_width = src_width // args.density * args.pixel_size
-    dest_img = numpy.zeros(shape=(dest_height, dest_width, 3), dtype=numpy.uint8)
-
-    palette = load_palette(args)
-    cache = load_cache(args)
-
-    progress = Progress(src_height // args.density * src_width // args.density)
-    stats = Statistics()
-
-    print('\r', progress, sep='', end='\r')
-
-    with ThreadPoolExecutor(max_workers=6) as executor:
-        start_time = perf_counter()
-        futures = list[Future]()
-
-        try:
-            for y in range(0, src_height, args.density):
-                for x in range(0, src_width, args.density):
-                    future = executor.submit(fill_pixel, x, y, src_img, dest_img, stats, palette, cache, args)
-                    futures.append(future)
-
-            for future in as_completed(futures):
-                stats.completion_time += perf_counter() - start_time
-                start_time = perf_counter()
-                progress.current += 1
-                progress.speed = progress.current / stats.completion_time
-                print('\r', progress, sep='', end='\r')
-        except KeyboardInterrupt:
-            print('\n\nCancelling, do not interrupt...', sep='')
-            for future in futures:
-                future.cancel()
-        else:
-            cv2.imwrite(args.dest, dest_img)
-
-    print('\n', stats, sep='')
-    save_cache(args, cache)
+    def cancel(self):
+        for future in self.futures:
+            future.cancel()
+        self.cache.save()
