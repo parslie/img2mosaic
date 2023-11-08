@@ -18,3 +18,6 @@ class Cache:
         makedirs(self.path.parent, exist_ok=True)
         with self.path.open("w") as file:
             file.write(json.dumps(self.data, sort_keys=True))
+
+    def pop(self, key: str):
+        self.data.pop(key, None)

@@ -25,3 +25,9 @@ class Palette:
         for path in self.data.values():
             paths.update(path)
         return paths
+    
+    def get(self, key: str, default: list) -> list:
+        return self.data.get(key, default)
+
+    def set(self, key: str, val: list):
+        self.data[key] = val
