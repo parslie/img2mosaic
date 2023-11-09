@@ -162,7 +162,7 @@ class Generate(Action):
                 # Cached key should be valid, unless you've reset the palette w/o resetting the cache
                 img_list = self.palette.get(cached_key, [])
             else:
-                # TODO: do not use palette's data dict here
+                # TODO: do not use palette's data dict directly here
                 closest_key = colors_to_closest_key(self.palette.data, src_colors)
                 # Closest key should be valid, since it's found via the palette
                 img_list = self.palette.get(closest_key, [])

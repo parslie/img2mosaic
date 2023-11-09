@@ -55,7 +55,7 @@ class Analyze(Action):
                 self.paths_analyzed += 1
                 print(f"{self.paths_analyzed} / {self.path_count} images analyzed", end="\r")
                 if self.paths_analyzed % 1000 == 0:
-                    # NOTE: not really needed, since self.cancel should account for it
+                    # NOTE: may not be needed, since self.cancel should account for it
                     with self.data_lock:
                         self.cache.save()
                         self.palette.save()

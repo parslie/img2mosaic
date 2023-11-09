@@ -27,3 +27,6 @@ class Cache:
     
     def set(self, key: str, val: str):
         self.data[key] = val
+
+    def contains(self, key: str) -> bool:
+        return key in self.data.keys()

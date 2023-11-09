@@ -1,7 +1,5 @@
-# from actions.analysis import analyze_img_dir
-# from actions.cache import generate_cache
-# from actions.generation import generate_mosaic
 from actions.analysis import Analyze
+from actions.cache import Cache
 from actions.generation import Generate
 from arguments.parsers import get_args 
 
@@ -16,7 +14,7 @@ def main():
         case "analyze":
             action = Analyze(args)
         case "cache":
-            pass
+            action = Cache(args)
 
     try:
         action.run()
