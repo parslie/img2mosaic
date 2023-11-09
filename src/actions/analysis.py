@@ -22,9 +22,9 @@ class Analyze(Action):
 
         self.__load_paths()
 
+        self.executor = ThreadPoolExecutor(max_workers=6)
         self.futures = list[Future]()
         self.data_lock = Lock()
-        self.paths_analyzed_lock = Lock()
 
     def __unpack_args(self, args: Arguments):
         self.density = args.density
@@ -47,19 +47,18 @@ class Analyze(Action):
         self.path_count = len(paths)
 
     def run(self):
-        with ThreadPoolExecutor(max_workers=6) as executor:
-            for path in self.paths:
-                future = executor.submit(self.__analyze_img, path)
-                self.futures.append(future)
-            for future in as_completed(self.futures):
-                self.paths_analyzed += 1
-                print(f"{self.paths_analyzed} / {self.path_count} images analyzed", end="\r")
-                if self.paths_analyzed % 1000 == 0:
-                    # NOTE: may not be needed, since self.cancel should account for it
-                    with self.data_lock:
-                        self.cache.save()
-                        self.palette.save()
-            print(f"{self.paths_analyzed} / {self.path_count} images analyzed")
+        for path in self.paths:
+            future = self.executor.submit(self.__analyze_img, path)
+            self.futures.append(future)
+        for future in as_completed(self.futures):
+            self.paths_analyzed += 1
+            if self.paths_analyzed % 1000 == 0:
+                # Done in order to avoid unsaved work after crash
+                with self.data_lock:
+                    self.cache.save()
+                    self.palette.save()
+            print(f"{self.paths_analyzed} / {self.path_count} images analyzed", end="\r")
+        print(f"{self.paths_analyzed} / {self.path_count} images analyzed")
 
         self.cache.save()
         self.palette.save()
@@ -84,6 +83,7 @@ class Analyze(Action):
 
     def __analyze_img(self, path: str):
         img = cv2.imread(path)
+        img = cv2.resize(img, (self.density * 100, self.density * 100))
         colors = self.__get_img_colors(img)
         img_key = colors_to_key(colors)
 
@@ -95,7 +95,7 @@ class Analyze(Action):
             self.palette.set(img_key, img_list)
 
     def cancel(self):
-        for future in self.futures:
-            future.cancel()
+        print(f"\r{self.paths_analyzed} / {self.path_count} images analyzed")
+        self.executor.shutdown(wait=True, cancel_futures=True)
         self.cache.save()
         self.palette.save()

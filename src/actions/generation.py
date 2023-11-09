@@ -83,6 +83,7 @@ class Generate(Action):
         self.progress = Progress(self.src_height // self.density * self.src_width // self.density)
         self.stats = Statistics()
 
+        self.executor = ThreadPoolExecutor(max_workers=6)
         self.futures = list[Future]()
         self.cache_lock = Lock()
         self.stats_lock = Lock()
@@ -125,20 +126,20 @@ class Generate(Action):
         self.dst = numpy.zeros(shape=dst_shape, dtype=numpy.uint8)
 
     def run(self):
-        with ThreadPoolExecutor(max_workers=6) as executor:
-            start_time = perf_counter()
+        start_time = perf_counter()
 
-            for y in range(0, self.src_height, self.density):
-                for x in range(0, self.src_width, self.density):
-                    future = executor.submit(self.__fill_pixel, x, y)
-                    self.futures.append(future)
-            for future in as_completed(self.futures):
-                end_time = perf_counter()
-                self.stats.completion_time += end_time - start_time
-                start_time = end_time
-                self.progress.current += 1
-                self.progress.speed = self.progress.current / self.stats.completion_time
-                print(self.progress, end="\r")
+        for y in range(0, self.src_height, self.density):
+            for x in range(0, self.src_width, self.density):
+                future = self.executor.submit(self.__fill_pixel, x, y)
+                self.futures.append(future)
+        for future in as_completed(self.futures):
+            end_time = perf_counter()
+            self.stats.completion_time += end_time - start_time
+            start_time = end_time
+            self.progress.current += 1
+            self.progress.speed = self.progress.current / self.stats.completion_time
+            print(self.progress, end="\r")
+
         print(self.progress)
         print(self.stats)
 
@@ -182,6 +183,7 @@ class Generate(Action):
         self.dst[dest_y:dest_y_end, dest_x:dest_x_end] = img[0:self.pixel_size, 0:self.pixel_size]
 
     def cancel(self):
-        for future in self.futures:
-            future.cancel()
+        print(f"\r{self.progress}")
+        print(self.stats)
+        self.executor.shutdown(wait=True, cancel_futures=True)
         self.cache.save()

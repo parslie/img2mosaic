@@ -61,15 +61,16 @@ class Cache(Action):
 
         print("0.00%", end="\r")
         for color_key in all_color_keys(self.density):
+            colors_cached += 1
+
             if self.all or not self.cache.contains(color_key):
                 colors = key_to_colors(color_key)
                 # TODO: do not use palette's data dict directly here
                 closest_key = colors_to_closest_key(self.palette.data, colors)
                 self.cache.set(color_key, closest_key)
-
-            colors_cached += 1
-            if colors_cached % 100 == 0:
-                self.cache.save()
+                
+                if colors_cached % 100 == 0:
+                    self.cache.save()
             print(f"{colors_cached / color_count:.2f}%", end="\r")
         print("100.00%")
         
