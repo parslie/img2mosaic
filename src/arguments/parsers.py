@@ -17,6 +17,8 @@ class Arguments:
     dir: str = ""
     recursive: bool = False
 
+    all: bool = False
+
 
 def add_general_arguments(parser: ArgumentParser):
     parser.add_argument(
