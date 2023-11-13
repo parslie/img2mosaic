@@ -1,10 +1,12 @@
 import random
+from time import perf_counter
 from typing import Generator
 
 from arguments.parsers import Arguments
 from data.cache import Cache as CacheData
 from data.palette import Palette
-from utils import colors_to_closest_key, key_to_colors
+from utils.colors import colors_to_closest_key, key_to_colors
+from utils.progress import Progress
 from .base import Action
 
 
@@ -43,6 +45,14 @@ def total_color_count(density: int) -> int:
     return count
 
 
+class Statistics:
+    def __init__(self):
+        self.completion_time = 0
+    
+    def __repr__(self) -> str:
+        return f"Completion time: {self.completion_time:.1f} sec"
+
+
 class Cache(Action):
     def __init__(self, args: Arguments):
         self.__unpack_args(args)
@@ -51,30 +61,40 @@ class Cache(Action):
         self.cache = CacheData(profile)
         self.palette = Palette(profile)
 
+        self.progress = Progress(total_color_count(self.density))
+        self.stats = Statistics()
+
     def __unpack_args(self, args: Arguments):
         self.all = args.all
         self.density = args.density
 
     def run(self):
-        color_count = total_color_count(self.density)
-        colors_cached = 0
+        print(self.progress, end="\r")
+        start_time = perf_counter()
 
-        print("0.00%", end="\r")
         for color_key in all_color_keys(self.density):
-            colors_cached += 1
-
             if self.all or not self.cache.contains(color_key):
                 colors = key_to_colors(color_key)
                 # TODO: do not use palette's data dict directly here
                 closest_key = colors_to_closest_key(self.palette.data, colors)
                 self.cache.set(color_key, closest_key)
                 
-                if colors_cached % 100 == 0:
+                if self.progress.current % 100 == 0:
                     self.cache.save()
-            print(f"{colors_cached / color_count:.2f}%", end="\r")
-        print("100.00%")
-        
+
+            end_time = perf_counter()
+            self.stats.completion_time += end_time - start_time
+            start_time = end_time
+            
+            self.progress.current += 1
+            self.progress.speed = self.progress.current / self.stats.completion_time
+            print(self.progress, end="\r")
+
+        print(self.progress)
+        print(self.stats)
         self.cache.save()
 
     def cancel(self):
+        print(f"\r{self.progress}")
+        print(self.stats)
         self.cache.save()

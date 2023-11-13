@@ -10,53 +10,11 @@ from time import perf_counter
 from arguments.parsers import Arguments
 from data.cache import Cache
 from data.palette import Palette
-from utils import colors_to_key, colors_to_closest_key
+from utils.colors import colors_to_key, colors_to_closest_key
+from utils.progress import Progress
 from .base import Action
 
 # TODO: rougher color precision could speed up caching, analysis, and generation
-
-
-class Progress:
-    def __init__(self, total: int):
-        self.current = 0
-        self.total = total
-        self.speed = 0
-
-    @property
-    def percent(self) -> float:
-        return self.current / self.total
-    
-    def eta_str(self) -> str:
-        remaining = self.total - self.current
-        if self.speed == 0:
-            return f'[ETA: {float("inf")} sec]'
-        
-        eta = remaining / self.speed
-        if eta / 60 >= 1:
-            return f'[ETA: {remaining / self.speed / 60:.1f} min]'
-
-        return f'[ETA: {remaining / self.speed:.1f} sec]'
-        
-    def percent_str(self) -> str:
-        return f'[{self.percent * 100:.0f}%]'
-    
-    def bar_str(self, width: int) -> str:
-        inner_width = min(width - 2, 34)
-        inner_filled_width = math.floor(inner_width * self.percent)
-        inner_empty_width = inner_width - inner_filled_width
-        inner_filled = '=' * inner_filled_width
-        inner_empty = ' ' * inner_empty_width
-        return f'[{inner_filled}{inner_empty}]'
-
-    def __repr__(self) -> str:
-        console_width = shutil.get_terminal_size((12, 24)).columns
-        
-        eta = self.eta_str()
-        percent = self.percent_str()
-        bar = self.bar_str(console_width - 2 - len(percent) - len(eta))
-        padding = ' ' * (console_width - 2 - len(eta) - len(percent) - len(bar))
-
-        return f'{bar} {percent} {eta}{padding}'
 
 
 class Statistics:
@@ -126,6 +84,7 @@ class Generate(Action):
         self.dst = numpy.zeros(shape=dst_shape, dtype=numpy.uint8)
 
     def run(self):
+        print(self.progress, end="\r")
         start_time = perf_counter()
 
         for y in range(0, self.src_height, self.density):

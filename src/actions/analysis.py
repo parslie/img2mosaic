@@ -3,13 +3,23 @@ import numpy
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from glob import glob
 from threading import Lock
+from time import perf_counter
 
 from arguments.parsers import Arguments
 from arguments.types import VALID_IMAGE_EXTS # TODO: should be handled differently
 from data.cache import Cache
 from data.palette import Palette
-from utils import colors_to_key
+from utils.colors import colors_to_key
+from utils.progress import Progress
 from .base import Action
+
+
+class Statistics:
+    def __init__(self):
+        self.completion_time = 0
+    
+    def __repr__(self) -> str:
+        return f"Completion time: {self.completion_time:.1f} sec"
 
 
 class Analyze(Action):
@@ -21,6 +31,9 @@ class Analyze(Action):
         self.palette = Palette(profile)
 
         self.__load_paths()
+
+        self.progress = Progress(self.path_count)
+        self.stats = Statistics()
 
         self.executor = ThreadPoolExecutor(max_workers=6)
         self.futures = list[Future]()
@@ -43,22 +56,30 @@ class Analyze(Action):
         paths.difference_update(self.palette.paths)
 
         self.paths = paths
-        self.paths_analyzed = 0
         self.path_count = len(paths)
 
     def run(self):
+        print(self.progress, end="\r")
+        start_time = perf_counter()
+
         for path in self.paths:
             future = self.executor.submit(self.__analyze_img, path)
             self.futures.append(future)
         for future in as_completed(self.futures):
-            self.paths_analyzed += 1
-            if self.paths_analyzed % 1000 == 0:
+            end_time = perf_counter()
+            self.stats.completion_time += end_time - start_time
+            start_time = end_time
+            self.progress.current += 1
+            self.progress.speed = self.progress.current / self.stats.completion_time
+            if self.progress.current % 1000 == 0:
                 # Done in order to avoid unsaved work after crash
                 with self.data_lock:
                     self.cache.save()
                     self.palette.save()
-            print(f"{self.paths_analyzed} / {self.path_count} images analyzed", end="\r")
-        print(f"{self.paths_analyzed} / {self.path_count} images analyzed")
+            print(self.progress, end="\r")
+
+        print(self.progress)
+        print(self.stats)
 
         self.cache.save()
         self.palette.save()
@@ -95,7 +116,8 @@ class Analyze(Action):
             self.palette.set(img_key, img_list)
 
     def cancel(self):
-        print(f"\r{self.paths_analyzed} / {self.path_count} images analyzed")
+        print(f"\r{self.progress}")
+        print(self.stats)
         self.executor.shutdown(wait=True, cancel_futures=True)
         self.cache.save()
         self.palette.save()
