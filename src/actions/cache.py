@@ -91,8 +91,7 @@ class Cache(Action):
             self.stats.completion_time += end_time - start_time
             start_time = end_time
             
-            self.progress.current += 1
-            self.progress.speed = self.progress.current / self.stats.completion_time
+            self.progress.increment()
             print(self.progress, end="\r")
 
         print(self.progress)

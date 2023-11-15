@@ -1,27 +1,55 @@
 import math
 import shutil
+from time import perf_counter
+
+MAX_INCREMENT_TIME_LOGS = 32
 
 
 class Progress:
     def __init__(self, total: int):
         self.current = 0
         self.total = total
-        self.speed = 0
+        self.__increment_time_logs = []
+
+    def increment(self):
+        self.current += 1
+        if len(self.__increment_time_logs) >= MAX_INCREMENT_TIME_LOGS:
+            self.__increment_time_logs.pop(0)
+        self.__increment_time_logs.append(perf_counter())
+
+    @property
+    def eta(self) -> float:
+        if len(self.__increment_time_logs) <= 1:
+            return float("inf")
+
+        time_between = 0
+        for idx in range(1, len(self.__increment_time_logs)):
+            prev_time = self.__increment_time_logs[idx - 1]
+            curr_time = self.__increment_time_logs[idx]
+            time_between += curr_time - prev_time
+        time_between /= len(self.__increment_time_logs)
+        speed = 1 / time_between
+
+        return (self.total - self.current) / speed
+
+    @property
+    def percent(self) -> float:
+        if self.total == 0:
+            return 1.0
+        else:
+            return self.current / self.total
 
     def bar_str(self, width: int) -> str:
         inner_width = width - 2
-        filled_width = math.floor(inner_width * self.current / self.total)
+        filled_width = math.floor(inner_width * self.percent)
         empty_width = inner_width - filled_width
         return f"[{"=" * filled_width}{" " * empty_width}]"
     
     def percent_str(self) -> str:
-        return f"[{self.current / self.total * 100:.0f}%]"
+        return f"[{self.percent * 100:.0f}%]"
     
     def eta_str(self) -> str:
-        if self.speed == 0:
-            return f"[ETA: N/A]"
-        
-        eta = (self.total - self.current) / self.speed
+        eta = self.eta
         unit = "sec"
 
         if eta >= 60 * 60 * 24 * 365:

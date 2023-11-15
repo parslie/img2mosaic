@@ -70,8 +70,7 @@ class Analyze(Action):
             end_time = perf_counter()
             self.stats.completion_time += end_time - start_time
             start_time = end_time
-            self.progress.current += 1
-            self.progress.speed = self.progress.current / self.stats.completion_time
+            self.progress.increment()
             if self.progress.current % 1000 == 0:
                 # Done in order to avoid unsaved work after crash
                 with self.data_lock:
