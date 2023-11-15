@@ -1,6 +1,14 @@
 import numpy
 
 
+def clamp_color(color: numpy.ndarray, complexity: int) -> numpy.ndarray:
+    color = color.copy()
+    color[0] -= color[0] % complexity
+    color[1] -= color[1] % complexity
+    color[2] -= color[2] % complexity
+    return color
+
+
 def colors_to_key(colors: list[numpy.ndarray]) -> str:
     key = ''
     for color in colors:

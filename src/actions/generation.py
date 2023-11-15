@@ -10,7 +10,7 @@ from time import perf_counter
 from arguments.parsers import Arguments
 from data.cache import Cache
 from data.palette import Palette
-from utils.colors import colors_to_key, colors_to_closest_key
+from utils.colors import colors_to_key, colors_to_closest_key, clamp_color
 from utils.progress import Progress
 from .base import Action
 
@@ -34,7 +34,7 @@ class Generate(Action):
         self.__load_src()
         self.__load_dst()
 
-        profile = f"{self.density}"
+        profile = f"{self.density} {self.complexity}"
         self.cache = Cache(profile)
         self.palette = Palette(profile)
 
@@ -48,6 +48,7 @@ class Generate(Action):
 
     def __unpack_args(self, args: Arguments):
         self.density = args.density
+        self.complexity = args.complexity
         self.src_path = args.src
         self.dst_path = args.dst
         self.src_max_size = args.src_size
@@ -110,7 +111,7 @@ class Generate(Action):
         for y_offset in range(self.density):
             for x_offset in range(self.density):
                 src_color = self.src[y+y_offset, x+x_offset]
-                src_colors.append(src_color)
+                src_colors.append(clamp_color(src_color, self.complexity))
 
         img_key = colors_to_key(src_colors)
         img_list = self.palette.get(img_key, [])

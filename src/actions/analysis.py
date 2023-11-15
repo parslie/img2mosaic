@@ -9,7 +9,7 @@ from arguments.parsers import Arguments
 from arguments.types import VALID_IMAGE_EXTS # TODO: should be handled differently
 from data.cache import Cache
 from data.palette import Palette
-from utils.colors import colors_to_key
+from utils.colors import colors_to_key, clamp_color
 from utils.progress import Progress
 from .base import Action
 
@@ -26,7 +26,7 @@ class Analyze(Action):
     def __init__(self, args: Arguments):
         self.__unpack_args(args)
 
-        profile = f"{self.density}"
+        profile = f"{self.density} {self.complexity}"
         self.cache = Cache(profile)
         self.palette = Palette(profile)
 
@@ -41,6 +41,7 @@ class Analyze(Action):
 
     def __unpack_args(self, args: Arguments):
         self.density = args.density
+        self.complexity = args.complexity
         self.dir = args.dir
         self.recursive = args.recursive
 
@@ -98,7 +99,7 @@ class Analyze(Action):
 
                 img_section = img[start_y:end_y, start_x:end_x]
                 average_color = img_section.mean(axis=(0, 1)).astype(numpy.uint8)
-                colors.append(average_color)
+                colors.append(clamp_color(average_color, self.complexity))
 
         return colors
 

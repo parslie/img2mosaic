@@ -8,6 +8,7 @@ from .types import existing_image, image, existing_folder, positive_int
 class Arguments:
     action: str = ""
     density: int = 1
+    complexity: int = 9 # TODO: add as settable later
 
     src: str = ""
     dst: str = ""
