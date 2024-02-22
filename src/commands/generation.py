@@ -12,7 +12,7 @@ from data.cache import Cache
 from data.palette import Palette
 from utils.colors import colors_to_key, colors_to_closest_key, clamp_color
 from utils.progress import Progress
-from .base import Action
+from .base import Command
 
 # TODO: rougher color precision could speed up caching, analysis, and generation
 
@@ -28,7 +28,7 @@ class Statistics:
             f"Cached entries: {self.cached_entries}"
 
 
-class Generate(Action):
+class Generate(Command):
     def __init__(self, args: Arguments):
         self.__unpack_args(args)
         self.__load_src()

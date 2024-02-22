@@ -1,7 +1,7 @@
 from arguments.parsers import Arguments
 
 
-class Action:
+class Command:
     def __init__(self, args: Arguments):
         print(f'TODO: implement {self.__class__.__name__} __init__()')
 

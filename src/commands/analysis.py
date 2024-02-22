@@ -11,7 +11,7 @@ from data.cache import Cache
 from data.palette import Palette
 from utils.colors import colors_to_key, clamp_color
 from utils.progress import Progress
-from .base import Action
+from .base import Command
 
 
 class Statistics:
@@ -22,7 +22,7 @@ class Statistics:
         return f"Completion time: {self.completion_time:.1f} sec"
 
 
-class Analyze(Action):
+class Analyze(Command):
     def __init__(self, args: Arguments):
         self.__unpack_args(args)
 

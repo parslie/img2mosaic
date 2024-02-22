@@ -1,6 +1,6 @@
-from actions.analysis import Analyze
-from actions.cache import Cache
-from actions.generation import Generate
+from commands.analysis import Analyze
+from commands.cache import Cache
+from commands.generation import Generate
 from arguments.parsers import get_args 
 
 

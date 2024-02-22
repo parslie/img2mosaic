@@ -8,41 +8,44 @@ from data.cache import Cache as CacheData
 from data.palette import Palette
 from utils.colors import colors_to_closest_key, key_to_colors
 from utils.progress import Progress
-from .base import Action
+from .base import Command
 
 
-def all_single_color_keys(complexity: int) -> Generator[str, None, None]:
+# TODO: remove density from function parameters
+
+
+def all_single_color_keys(reduction: int) -> Generator[str, None, None]:
     # r_values = list(range(256))
     # random.shuffle(r_values)
-    r_values = range(0, 256, complexity)
+    r_values = range(0, 256, reduction)
     for r in r_values:
         # g_values = list(range(256))
         # random.shuffle(g_values)
-        g_values = range(0, 256, complexity)
+        g_values = range(0, 256, reduction)
         for g in g_values:
             # b_values = list(range(256))
             # random.shuffle(b_values)
-            b_values = range(0, 256, complexity)
+            b_values = range(0, 256, reduction)
             for b in b_values:
                 yield f"{r} {g} {b}"
 
 
-def all_color_keys_helper(color_count: int, complexity: int) -> Generator[str, None, None]:
-    for color_key in all_single_color_keys(complexity):
+def all_color_keys_helper(color_count: int, reduction: int) -> Generator[str, None, None]:
+    for color_key in all_single_color_keys(reduction):
         if color_count == 1:
             yield f"{color_key}"
         else:
-            for next_color_key in all_color_keys_helper(color_count - 1, complexity):
+            for next_color_key in all_color_keys_helper(color_count - 1, reduction):
                 yield f"{color_key} {next_color_key}"
 
 
-def all_color_keys(density: int, complexity: int) -> Generator[str, None, None]:
-    for color_key in all_color_keys_helper(density ** 2, complexity):
+def all_color_keys(density: int, reduction: int) -> Generator[str, None, None]:
+    for color_key in all_color_keys_helper(density ** 2, reduction):
         yield color_key
 
 
-def total_color_count(density: int, complexity: int) -> int:
-    per_density_count = (256 // complexity) ** 3
+def total_color_count(density: int, reduction: int) -> int:
+    per_density_count = (256 // reduction) ** 3
     count = per_density_count ** (density ** 2)
     # for _ in range(density ** 2):
     #     count *= per_density_count
@@ -57,33 +60,34 @@ class Statistics:
         return f"Completion time: {self.completion_time:.1f} sec"
 
 
-class Cache(Action):
+class Cache(Command):
     def __init__(self, args: Arguments):
         self.__unpack_args(args)
-
-        profile = f"{self.density} {self.complexity}"
+        
+        profile = f"{self.color_reduction}"
         self.cache = CacheData(profile)
         self.palette = Palette(profile)
 
-        self.progress = Progress(total_color_count(self.density, self.complexity))
+        self.progress = Progress(total_color_count(2, self.color_reduction))
         self.stats = Statistics()
-
+    
     def __unpack_args(self, args: Arguments):
         self.all = args.all
-        self.density = args.density
-        self.complexity = args.complexity
-
+        self.color_reduction = args.color_reduction
+    
+    # TODO: if palette is empty, exit
     def run(self):
         print(self.progress, end="\r")
         start_time = perf_counter()
 
-        for color_key in all_color_keys(self.density, self.complexity):
+        for color_key in all_color_keys(2, self.color_reduction):
             if self.all or not self.cache.contains(color_key):
                 colors = key_to_colors(color_key)
                 # TODO: do not use palette's data dict directly here
                 closest_key = colors_to_closest_key(self.palette.data, colors)
                 self.cache.set(color_key, closest_key)
                 
+                # TODO: remove this or set higher threshold
                 if self.progress.current % 100 == 0:
                     self.cache.save()
 
@@ -97,8 +101,8 @@ class Cache(Action):
         print(self.progress)
         print(self.stats)
         self.cache.save()
-
+    
     def cancel(self):
         print(f"\r{self.progress}")
-        print(self.stats)
+        print({self.stats})
         self.cache.save()
