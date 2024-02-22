@@ -2,7 +2,7 @@ import math
 import shutil
 from time import perf_counter
 
-MAX_INCREMENT_TIME_LOGS = 32
+MAX_INCREMENT_TIME_LOGS = 128
 
 
 class Progress:

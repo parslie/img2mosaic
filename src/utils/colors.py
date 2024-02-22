@@ -1,25 +1,25 @@
 import numpy
 
 
-def clamp_color(color: numpy.ndarray, complexity: int) -> numpy.ndarray:
+def clamp_color(color: numpy.ndarray, reduction: int) -> numpy.ndarray:
     color = color.copy()
-    color[0] -= color[0] % complexity
-    color[1] -= color[1] % complexity
-    color[2] -= color[2] % complexity
+    color[0] -= color[0] % reduction
+    color[1] -= color[1] % reduction
+    color[2] -= color[2] % reduction
     return color
 
 
 def colors_to_key(colors: list[numpy.ndarray]) -> str:
-    key = ''
+    key = ""
     for color in colors:
-        key += f'{color[0]} {color[1]} {color[2]} '
+        key += f"{color[0]} {color[1]} {color[2]} "
     return key[:-1]
 
 
 def key_to_colors(key: str) -> list[numpy.ndarray]:
     colors = []
 
-    key_split = key.split(' ')
+    key_split = key.split(" ")
     for i in range(0, len(key_split), 3):
         color = numpy.array([int(x) for x in key_split[i:i+3]], dtype=numpy.uint8)
         colors.append(color)
@@ -35,7 +35,7 @@ def color_sqr_dist(color_1: numpy.ndarray, color_2: numpy.ndarray) -> float:
 
 
 def colors_to_closest_key(palette: dict, colors: list[numpy.ndarray]) -> str:
-    closest_sqr_dist = float('inf')
+    closest_sqr_dist = float("inf")
     closest_key = None
 
     for close_key in palette.keys():
