@@ -14,8 +14,6 @@ from utils.colors import colors_to_key, colors_to_closest_key, clamp_color
 from utils.progress import Progress
 from .base import Command
 
-# TODO: rougher color precision could speed up caching, analysis, and generation
-
 
 class Statistics:
     def __init__(self):
@@ -31,65 +29,64 @@ class Statistics:
 class Generate(Command):
     def __init__(self, args: Arguments):
         self.__unpack_args(args)
-        self.__load_src()
-        self.__load_dst()
+        self.__load_source()
+        self.__load_destination()
 
-        profile = f"{self.density} {self.complexity}"
+        profile = f"{self.color_reduction}"
         self.cache = Cache(profile)
         self.palette = Palette(profile)
 
-        self.progress = Progress(self.src_height // self.density * self.src_width // self.density)
+        self.progress = Progress((self.source_height - 1) * (self.source_width - 1))
         self.stats = Statistics()
 
-        self.executor = ThreadPoolExecutor(max_workers=6)
+        self.executor = ThreadPoolExecutor(max_workers=6) # TODO: optimize max_workers
         self.futures = list[Future]()
         self.cache_lock = Lock()
         self.stats_lock = Lock()
-
+    
     def __unpack_args(self, args: Arguments):
-        self.density = args.density
-        self.complexity = args.complexity
-        self.src_path = args.src
-        self.dst_path = args.dst
-        self.src_max_size = args.src_size
+        self.color_reduction = args.color_reduction
+        self.source_path = args.source
+        self.destination_path = args.destination
+        self.source_size = args.source_size
         self.pixel_size = args.pixel_size
 
-    def __load_src(self):
-        src = cv2.imread(self.src_path)
-        height, width, _ = src.shape
+    def __load_source(self):
+        source = cv2.imread(self.source_path)
+        height, width, _ = source.shape
 
         # Decides new size of image
-        scale_factor = self.src_max_size / max(height, width)
+        scale_factor = self.source_size / max(height, width)
         new_height, new_width = height, width
         if scale_factor < 1:
             new_height = round(height * scale_factor)
             new_width = round(width * scale_factor)
 
         # Ensures divisible by density
-        if diff := new_height % self.density:
-            new_height += self.density - diff
-        if diff := new_width % self.density:
-            new_width += self.density - diff
+        if diff := new_height % 2:
+            new_height += 2 - diff
+        if diff := new_width % 2:
+            new_width += 2 - diff
 
         # Apply new size of image
         if new_height != height or new_width != width:
-            src = cv2.resize(src, (new_width, new_height))
+            source = cv2.resize(source, (new_width, new_height))
 
-        self.src = src
-        self.src_height, self.src_width, _ = self.src.shape
+        self.source = source
+        self.source_height, self.source_width, _ = self.source.shape
 
-    def __load_dst(self):
-        self.dst_height = self.src_height // self.density * self.pixel_size
-        self.dst_width = self.src_width // self.density * self.pixel_size
-        dst_shape = (self.dst_height, self.dst_width, 3)
-        self.dst = numpy.zeros(shape=dst_shape, dtype=numpy.uint8)
+    def __load_destination(self):
+        self.destination_height = (self.source_height - 1) * self.pixel_size
+        self.destination_width = (self.source_width - 1) * self.pixel_size
+        destination_shape = (self.destination_height, self.destination_width, 3)
+        self.destination = numpy.zeros(shape=destination_shape, dtype=numpy.uint8)
 
     def run(self):
         print(self.progress, end="\r")
         start_time = perf_counter()
-
-        for y in range(0, self.src_height, self.density):
-            for x in range(0, self.src_width, self.density):
+        
+        for y in range(0, self.source_height - 1):
+            for x in range(0, self.source_width - 1):
                 future = self.executor.submit(self.__fill_pixel, x, y)
                 self.futures.append(future)
         for future in as_completed(self.futures):
@@ -103,43 +100,44 @@ class Generate(Command):
         print(self.stats)
 
         self.cache.save()
-        cv2.imwrite(self.dst_path, self.dst)
-    
+        cv2.imwrite(self.destination_path, self.destination)
+
     def __fill_pixel(self, x: int, y: int):
-        src_colors = []
-        for y_offset in range(self.density):
-            for x_offset in range(self.density):
-                src_color = self.src[y+y_offset, x+x_offset]
-                src_colors.append(clamp_color(src_color, self.complexity))
+        source_colors = [
+            clamp_color(self.source[y, x], self.color_reduction),
+            clamp_color(self.source[y, x + 1], self.color_reduction),
+            clamp_color(self.source[y + 1, x], self.color_reduction),
+            clamp_color(self.source[y + 1, x + 1], self.color_reduction),
+        ]
 
-        img_key = colors_to_key(src_colors)
-        img_list = self.palette.get(img_key, [])
+        image_key = colors_to_key(source_colors)
+        image_list = self.palette.get(image_key, [])
 
-        if not img_list:
-            cached_key = self.cache.get(img_key, None)
+        if not image_list:
+            cached_key = self.cache.get(image_key, None)
 
             if cached_key:
                 # Cached key should be valid, unless you've reset the palette w/o resetting the cache
-                img_list = self.palette.get(cached_key, [])
+                image_list = self.palette.get(cached_key, [])
             else:
                 # TODO: do not use palette's data dict directly here
-                closest_key = colors_to_closest_key(self.palette.data, src_colors)
+                closest_key = colors_to_closest_key(self.palette.data, source_colors)
                 # Closest key should be valid, since it's found via the palette
-                img_list = self.palette.get(closest_key, [])
+                image_list = self.palette.get(closest_key, [])
                 with self.cache_lock:
-                    self.cache.set(img_key, closest_key)
+                    self.cache.set(image_key, closest_key)
                 with self.stats_lock:
                     self.stats.cached_entries += 1
-
-        img = cv2.imread(random.choice(img_list))
-        img = cv2.resize(img, (self.pixel_size, self.pixel_size))
+        
+        image = cv2.imread(random.choice(image_list))
+        image = cv2.resize(image, (self.pixel_size, self.pixel_size))
 
         # Apply palette image to dest
-        dest_y = int(y / self.density) * self.pixel_size
-        dest_x = int(x / self.density) * self.pixel_size
+        dest_y = y * self.pixel_size
+        dest_x = x * self.pixel_size
         dest_y_end = dest_y + self.pixel_size
         dest_x_end = dest_x + self.pixel_size
-        self.dst[dest_y:dest_y_end, dest_x:dest_x_end] = img[0:self.pixel_size, 0:self.pixel_size]
+        self.destination[dest_y:dest_y_end, dest_x:dest_x_end] = image[0:self.pixel_size, 0:self.pixel_size]
 
     def cancel(self):
         print(f"\r{self.progress}")
