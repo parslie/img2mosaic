@@ -1,21 +1,20 @@
 from argparse import ArgumentParser
 from dataclasses import dataclass
 
-from .types import existing_image, image, existing_folder, positive_int
+from .types import existing_folder, existing_image, image, positive_int
 
 
 @dataclass
 class Arguments:
-    action: str = ""
-    density: int = 1
-    complexity: int = 9 # TODO: add as settable later
+    command: str = ""
+    color_reduction: int = 1
 
-    src: str = ""
-    dst: str = ""
-    src_size: int = 64
+    source: str = ""
+    destination: str = ""
+    source_size: int = 64
     pixel_size: int = 32
 
-    dir: str = ""
+    directory: str = ""
     recursive: bool = False
 
     all: bool = False
@@ -23,30 +22,31 @@ class Arguments:
 
 def add_general_arguments(parser: ArgumentParser):
     parser.add_argument(
-        "--density",
+        "--reduce",
         type=positive_int,
-        default=Arguments.density,
-        help="amount of pixels to be represented by one image",
-        metavar="PIXELS",
+        default=Arguments.color_reduction,
+        dest="color_reduction",
+        help="how much to reduce the color space (1 = full, 2 = half, 3 = third)",
+        metavar="AMOUNT",
     )
 
 
 def add_generation_arguments(parser: ArgumentParser):
     parser.add_argument(
-        "src",
+        "source",
         type=existing_image,
         help="path to the image to mosaic",
     )
     parser.add_argument(
-        "dst",
+        "destination",
         type=image,
-        help="path to the generated mosaic",
+        help="path to output the generated mosaic",
     )
     parser.add_argument(
         "-s",
-        dest="src_size",
+        dest="source_size",
         type=positive_int,
-        default=Arguments.src_size,
+        default=Arguments.source_size,
         help="size of the image to mosaic",
         metavar="PIXELS",
     )
@@ -62,7 +62,7 @@ def add_generation_arguments(parser: ArgumentParser):
 
 def add_analysis_arguments(parser: ArgumentParser):
     parser.add_argument(
-        "dir",
+        "directory",
         type=existing_folder,
         help="path to the directory of images to add to the palette",
         metavar="PATH",
