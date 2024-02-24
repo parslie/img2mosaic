@@ -11,7 +11,7 @@ class Arguments:
 
     source: str = ""
     destination: str = ""
-    source_size: int = 64
+    source_size: int = 96
     pixel_size: int = 32
 
     directory: str = ""
