@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import click
 
 import command
@@ -10,9 +12,10 @@ import command
 @click.option(
     "-d",
     "--density",
-    help="Amount of pixels each axes of an analzed image represents.",
+    help="Amount of pixels each axes of an analyzed image represents.",
     default=1,
     type=click.IntRange(min=1),
+    metavar="INTEGER",
 )
 @click.pass_context
 def main(ctx: click.Context, profile: str, density: int):
@@ -29,12 +32,21 @@ def generate(ctx: click.Context):
     command.generate(profile, density)
 
 
-@main.command()
+@main.command(help="Analyze the colors of images to use during generation.")
+@click.argument("path", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "-r",
+    "--recurse",
+    help="Analze directories recursively.",
+    type=bool,
+    is_flag=True,
+    default=False,
+)
 @click.pass_context
-def analyze(ctx: click.Context):
+def analyze(ctx: click.Context, path: Path, recurse: bool):
     profile: str = ctx.obj["profile"]
     density: int = ctx.obj["density"]
-    command.analyze(profile, density)
+    command.analyze(profile, density, path, recurse)
 
 
 if __name__ == "__main__":
