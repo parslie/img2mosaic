@@ -18,6 +18,9 @@ def analyze(profile: str, density: int, base_path: Path, recurse: bool):
     image_paths = extract_image_paths(base_path, recurse)
     with click.progressbar(image_paths, label="Analyzing images") as bar:
         for image_path in bar:
+            if database.has_image(profile, density, image_path):
+                continue
+
             image = cv.imread(str(image_path), cv.IMREAD_COLOR_BGR)
             for image_section in extract_image_sections(image):
                 db_image = Image(

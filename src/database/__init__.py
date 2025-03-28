@@ -1,8 +1,10 @@
+from pathlib import Path
+
 from platformdirs import user_data_path
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from database.models import Base
+from database.models import Base, Image
 
 
 class Database:
@@ -20,3 +22,7 @@ class Database:
     def add(self, *rows):
         for row in rows:
             self.session.add(row)
+
+    def has_image(self, profile: str, density: int, path: Path) -> bool:
+        stmt = select(Image).filter_by(profile=profile, density=density, path=str(path))
+        return self.session.execute(stmt).first() is not None
