@@ -16,3 +16,7 @@ class Database:
 
     def commit(self):
         self.session.commit()
+
+    def add(self, *rows):
+        for row in rows:
+            self.session.add(row)
