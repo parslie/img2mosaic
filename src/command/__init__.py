@@ -6,6 +6,7 @@ import cv2 as cv
 from command.analyze import extract_colors, extract_image_paths, extract_image_sections
 from database import Database
 from database.models import Image
+from util import colors_to_str
 
 
 def generate(profile: str, density: int):
@@ -23,10 +24,7 @@ def analyze(profile: str, density: int, base_path: Path, recurse: bool):
 
             image = cv.imread(str(image_path), cv.IMREAD_COLOR_BGR)
             for image_section in extract_image_sections(image):
-                color_str = ""
-                for blue, green, red in extract_colors(image_section.pixels, density):
-                    color_str += f"{blue:03d}{green:03d}{red:03d}"
-
+                color_str = colors_to_str(extract_colors(image_section.pixels, density))
                 db_image = Image(
                     path=str(image_path),
                     x=image_section.x,

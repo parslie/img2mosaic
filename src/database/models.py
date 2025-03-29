@@ -1,5 +1,7 @@
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from util import str_to_colors
+
 
 class Base(DeclarativeBase):
     pass
@@ -18,13 +20,7 @@ class Image(Base):
 
     @property
     def colors(self) -> list[tuple[int, int, int]]:
-        colors = []
-        for idx in range(0, len(self.color_str), 9):
-            blue_str = self.color_str[idx : idx + 3]
-            green_str = self.color_str[idx + 3 : idx + 6]
-            red_str = self.color_str[idx + 6 : idx + 9]
-            colors.append((int(blue_str), int(green_str), int(red_str)))
-        return colors
+        return str_to_colors(self.color_str)
 
     def __repr__(self) -> str:
         return f"Image(path={self.path!r}, x={self.x!r}, y={self.y!r}, density={self.density!r}, profile={self.profile!r}, colors={self.color_str!r})"
