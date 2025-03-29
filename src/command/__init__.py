@@ -10,7 +10,9 @@ from util import colors_to_str
 
 
 def generate(profile: str, density: int):
-    pass
+    database = Database()
+    image = database.get_random_image(profile, density, [(52, 10, 217)])
+    print(image)
 
 
 def analyze(profile: str, density: int, base_path: Path, recurse: bool):
